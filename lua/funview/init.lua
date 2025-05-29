@@ -1,6 +1,6 @@
 local M = {}
 
-local log = require("wswrite").log
+--local log = require("wswrite").log
 
 local context = "ctx_funview"
 
@@ -11,6 +11,7 @@ local language_handlers = {
 	javascript = require("funview.parsers.javascript"),
 	bash = require("funview.parsers.bash"),
 	markdown = require("funview.parsers.markdown"),
+	c = require("funview.parsers.c"),
 }
 
 local last_buffer_we_bound_to = nil

@@ -1,14 +1,18 @@
--- Function to handle Markdown-specific Tree-sitter parsing
 local function lang_markdown()
-	local parser = vim.treesitter.get_parser(0, "markdown")
+	local ok, parser = pcall(vim.treesitter.get_parser, 0, "markdown")
+	if not ok or not parser then
+		print("Failed to get Markdown parser")
+		return {}
+	end
+
 	local tree = parser:parse()[1]
 	if not tree then
 		print("Failed to parse the buffer")
 		return {}
 	end
+
 	local root = tree:root()
 
-	-- Markdown-specific Tree-sitter query
 	local query = vim.treesitter.query.parse(
 		"markdown",
 		[[
@@ -29,23 +33,25 @@ local function lang_markdown()
 
 	local headings = {}
 
-	-- Iterate over the matches in the query
-	for _, match, _ in query:iter_matches(root, 0) do
+	for _, match, _ in query:iter_matches(root, 0, 0, -1, { all = false }) do
 		local heading_title = ""
 		local start_row = nil
 
 		for id, node in pairs(match) do
 			local capture_name = query.captures[id]
 			if capture_name == "heading_title" then
-				heading_title = vim.treesitter.get_node_text(node, 0)
-				start_row = node:range()
+				if node and node:range() then
+					heading_title = vim.treesitter.get_node_text(node, 0)
+					start_row = select(1, node:range())
+				end
 			end
 		end
 
 		if heading_title ~= "" and start_row then
-			table.insert(headings, { name = heading_title, line = start_row + 1 }) -- Store heading title and line
+			table.insert(headings, { name = heading_title, line = start_row + 1 })
 		end
 	end
+
 	return headings
 end
 

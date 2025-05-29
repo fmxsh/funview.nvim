@@ -41,34 +41,47 @@ local function lang_lua()
 	local functions = {}
 
 	-- Iterate over the matches in the query
-	for _, match, _ in query:iter_matches(root, 0) do
+	for _, match, _ in query:iter_matches(root, 0, 0, -1, { all = true }) do
 		local func_name = ""
 		local start_row = nil
 
-		-- Check if the match is a standalone function or a function in a table
-		for id, node in pairs(match) do
+		local table_name_node = nil
+		local field_name_node = nil
+
+		for id, nodes in pairs(match) do
 			local capture_name = query.captures[id]
-			if capture_name == "function_name" then
-				-- Standalone function
+
+			-- Always take the first node for that capture
+			local node = nodes[1]
+
+			if capture_name == "function_name" and node then
 				func_name = vim.treesitter.get_node_text(node, 0)
-				start_row = node:range()
+				start_row = select(1, node:range())
 			elseif capture_name == "table_name" then
-				-- Table function: concatenate table and field names
-				local table_name = vim.treesitter.get_node_text(node, 0)
-				local field_name = vim.treesitter.get_node_text(match[id + 1], 0) -- Field name is the next capture
-				func_name = table_name .. "." .. field_name
-				start_row = node:range()
-			elseif capture_name == "table_field_name" then
-				-- Table constructor function
+				table_name_node = nodes[1]
+			elseif capture_name == "field_name" then
+				field_name_node = nodes[1]
+			elseif capture_name == "table_field_name" and node then
 				func_name = vim.treesitter.get_node_text(node, 0)
-				start_row = node:range()
+				start_row = select(1, node:range())
 			end
 		end
 
+		if table_name_node and field_name_node then
+			local table_name = vim.treesitter.get_node_text(table_name_node, 0)
+			local field_name = vim.treesitter.get_node_text(field_name_node, 0)
+			func_name = table_name .. "." .. field_name
+			start_row = select(1, table_name_node:range())
+		end
+
 		if func_name ~= "" and start_row then
-			table.insert(functions, { name = func_name, line = start_row + 1 }) -- Store function name and line
+			table.insert(functions, {
+				name = func_name,
+				line = start_row + 1,
+			})
 		end
 	end
+
 	return functions
 end
 

@@ -1,6 +1,11 @@
 local function lang_php()
-	-- Get the Tree-sitter parser for the PHP language
-	local parser = vim.treesitter.get_parser(0, "php")
+	-- Safely get the Tree-sitter parser for PHP
+	local ok, parser = pcall(vim.treesitter.get_parser, 0, "php")
+	if not ok or not parser then
+		print("Failed to get PHP parser")
+		return {}
+	end
+
 	local tree = parser:parse()[1]
 	if not tree then
 		print("Failed to parse the buffer")
@@ -9,22 +14,19 @@ local function lang_php()
 
 	local root = tree:root()
 
-	-- Tree-sitter query for PHP class, method, and function declarations
+	-- Tree-sitter query for PHP declarations
 	local query = vim.treesitter.query.parse(
 		"php",
 		[[
-        ; Match standalone function declarations
-        (function_definition
-            name: (name) @function_name)
+(function_definition
+  name: (name) @function_name)
 
-        ; Match method declarations inside a class
-        (method_declaration
-            name: (name) @method_name)
+(method_declaration
+  name: (name) @method_name)
 
-        ; Match class declarations
-        (class_declaration
-            name: (name) @class_name)
-        ]]
+(class_declaration
+  name: (name) @class_name)
+		]]
 	)
 
 	if not query then
@@ -34,36 +36,25 @@ local function lang_php()
 
 	local declarations = {}
 
-	-- Iterate over the matches in the query
-	for _, match, _ in query:iter_matches(root, 0) do
-		local decl_name = ""
-		local start_row = nil
-
-		-- Loop through the matched nodes (functions, methods, or classes)
+	for _, match, _ in query:iter_matches(root, 0, 0, -1, { all = false }) do
 		for id, node in pairs(match) do
 			local capture_name = query.captures[id]
-			if node then -- Ensure that the node is not nil
-				if capture_name == "function_name" then
-					-- Standalone function declaration
-					decl_name = vim.treesitter.get_node_text(node, 0)
-					start_row = node:range()
-				elseif capture_name == "method_name" then
-					-- Method inside a class
-					decl_name = vim.treesitter.get_node_text(node, 0)
-					start_row = node:range()
-				elseif capture_name == "class_name" then
-					-- Class declaration
-					decl_name = vim.treesitter.get_node_text(node, 0)
-					start_row = node:range()
-				end
-			end
-		end
+			if node and node:range() then
+				local name = vim.treesitter.get_node_text(node, 0)
+				local start_row = select(1, node:range())
 
-		if decl_name ~= "" and start_row then
-			table.insert(declarations, { name = decl_name, line = start_row + 1 }) -- Store the declaration name and line number
+				local kind = capture_name:gsub("_name$", "") -- "function", "method", "class"
+
+				table.insert(declarations, {
+					name = name,
+					line = start_row + 1,
+					type = kind,
+				})
+			end
 		end
 	end
 
 	return declarations
 end
+
 return lang_php
